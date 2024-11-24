@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Golang WebSocket Chat</title>
+    <style>
+        .content { display: flex; flex-direction: row; justify-content: center; margin: 10px; }
+        #output { border: 1px solid black; padding: 10px; max-height: 300px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+    <h1>Golang WebSocket Chat</h1>
+    <div class="content">
+        <input type="text" id="username" placeholder="Ismingizni kiriting">
+        <button onclick="setUsername()">Davom etish</button>
+    </div>
+    <div id="chat" style="display: none;">
+        <div class="content">
+            <input type="text" id="input" placeholder="Xabar yozing">
+            <button onclick="send()">Yuborish</button>
+        </div>
+        <div class="content">
+            <input type="file" id="fileInput">
+            <button onclick="sendFile()">Faylni yuborish</button>
+        </div>
+        <pre id="output"></pre>
+    </div>
+</body>
+<script>
+    var username = "";
+    var input = document.getElementById("input");
+    var output = document.getElementById("output");
+    var usernameInput = document.getElementById("username");
+    var chatSection = document.getElementById("chat");
+    var socket = new WebSocket("ws://localhost:8080/echo");
+
+    socket.onopen = function () { output.innerHTML += "Status: Siz ulanishingiz amalga oshdi!\n"; };
+    socket.onmessage = function (e) {
+        var msg = JSON.parse(e.data);
+        if (msg.is_join) {
+            output.innerHTML += `Yangi foydalanuvchi qo'shildi: ${msg.username}\n`;
+        } else if (msg.file_name && msg.file_data) {
+            var link = document.createElement("a");
+            link.href = "data:application/octet-stream;base64," + msg.file_data;
+            link.download = msg.file_name;
+            link.innerText = `${msg.username} fayl yubordi: ${msg.file_name}`;
+            output.appendChild(link);
+            output.innerHTML += "\n";
+        } else if (msg.content) {
+            output.innerHTML += `${msg.username}: ${msg.content}\n`;
+        }
+    };
+
+    function setUsername() {
+        username = usernameInput.value.trim();
+        if (username) {
+            usernameInput.parentElement.style.display = "none";
+            chatSection.style.display = "block";
+            socket.send(JSON.stringify({ username: username, is_join: true }));
+        } else {
+            alert("Ismni kiriting!");
+        }
+    }
+
+    function send() {
+        var message = { username: username, content: input.value.trim() };
+        if (message.content) {
+            socket.send(JSON.stringify(message));
+            input.value = "";
+        }
+    }
+
+    function sendFile() {
+        var fileInput = document.getElementById("fileInput");
+        var file = fileInput.files[0];
+        if (file) {
+            var reader = new FileReader();
+            reader.onload = function (e) {
+                var message = { username: username, file_name: file.name, file_data: e.target.result.split(",")[1] };
+                socket.send(JSON.stringify(message));
+                output.innerHTML += `Fayl yuborildi: ${file.name}\n`;
+            };
+            reader.readAsDataURL(file);
+        } else {
+            alert("Fayl tanlanmadi!");
+        }
+    }
+</script>
+</html>
